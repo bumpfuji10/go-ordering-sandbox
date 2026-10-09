@@ -1,0 +1,24 @@
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/backend/bin/
+
+# 環境変数（接続情報などの秘密を含むため追跡しない）
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+
+# エディタ
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Claude Code の作業用ディレクトリ
+.claude/.cc-writes/
