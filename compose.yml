@@ -7,9 +7,18 @@ services:
       POSTGRES_DB: ordering
     ports:
       - "5432:5432"
+    # -h localhost で TCP 越しに確かめる。初期化中の一時サーバーはソケットでしか
+    # 待ち受けないため、初期化が終わるまでは準備完了と判定されない。
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U app -d ordering"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/db/migrations:/docker-entrypoint-initdb.d:ro
+      # 初回起動時に init.sh が migrations と seeds を順に流し込む。
+      # 2 回目以降はデータ領域が残っているため実行されない（mise run db:reset で作り直す）。
+      - ./backend/db:/docker-entrypoint-initdb.d:ro
 
 volumes:
   postgres_data:
