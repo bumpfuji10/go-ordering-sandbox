@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"example.com/ordering/internal/db"
+	"example.com/ordering/internal/env"
 	"example.com/ordering/internal/server"
 )
 
@@ -41,7 +42,7 @@ func run() error {
 
 	log.Println("データベースへの接続を確認しました")
 
-	addr := ":" + envOr("PORT", "8080")
+	addr := ":" + env.Or("PORT", "8080")
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: server.NewRouter(database),
@@ -81,12 +82,4 @@ func run() error {
 
 	log.Println("停止しました")
 	return nil
-}
-
-// envOr は環境変数を読み、空であれば既定値を返す。
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
