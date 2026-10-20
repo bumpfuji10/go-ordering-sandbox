@@ -4,7 +4,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"example.com/ordering/internal/db"
+	"example.com/ordering/internal/env"
 	"example.com/ordering/internal/server"
 )
 
@@ -41,9 +44,7 @@ func run() error {
 
 	log.Println("データベースへの接続を確認しました")
 
-	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{
-		Addr:    addr,
 		Handler: server.NewRouter(database),
 		// 時間の上限を定めないと、応答しない相手との接続が残り続け、
 		// やがて新しい要求を受け付けられなくなる。
@@ -53,13 +54,23 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	// ListenAndServe は停止するまで戻らないため、別の流れで動かし、
+	// ListenAndServe はポートの確保と受け付けをまとめて行うため、
+	// 確保に失敗したかどうかを受け付けの開始前に知る手段がない。
+	// 先に Listen でポートを押さえ、成功してから開始を記録する。
+	addr := ":" + env.Or("PORT", "8080")
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("ポート %s を確保できませんでした: %w", addr, err)
+	}
+	log.Printf("要求の受け付けを開始します: http://localhost%s", addr)
+
+	// Serve は停止するまで戻らないため、別の流れで動かし、
 	// 本体は終了の合図を待つ。
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("要求の受け付けを開始します: http://localhost%s", addr)
 		// 正常な停止でも ErrServerClosed が返るため、異常とは区別する。
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		// ln の後始末は Serve が引き受け、戻る時点で閉じられている。
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -81,12 +92,4 @@ func run() error {
 
 	log.Println("停止しました")
 	return nil
-}
-
-// envOr は環境変数を読み、空であれば既定値を返す。
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }

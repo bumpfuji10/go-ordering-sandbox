@@ -5,8 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"time"
+
+	"example.com/ordering/internal/env"
 
 	// pgx のドライバを database/sql に登録するためだけに読み込む。
 	// このパッケージの関数を直接呼ぶことはないため、識別子を _ にして
@@ -28,12 +29,12 @@ type Config struct {
 // 未設定の項目には compose.yml に合わせた既定値を使う。
 func LoadConfig() Config {
 	return Config{
-		Host:     envOr("DB_HOST", "localhost"),
-		Port:     envOr("DB_PORT", "5432"),
-		User:     envOr("DB_USER", "app"),
-		Password: envOr("DB_PASSWORD", "password"),
-		Database: envOr("DB_NAME", "ordering"),
-		SSLMode:  envOr("DB_SSLMODE", "disable"),
+		Host:     env.Or("DB_HOST", "localhost"),
+		Port:     env.Or("DB_PORT", "5432"),
+		User:     env.Or("DB_USER", "app"),
+		Password: env.Or("DB_PASSWORD", "password"),
+		Database: env.Or("DB_NAME", "ordering"),
+		SSLMode:  env.Or("DB_SSLMODE", "disable"),
 	}
 }
 
@@ -71,12 +72,4 @@ func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
 	}
 
 	return database, nil
-}
-
-// envOr は環境変数を読み、空であれば既定値を返す。
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
