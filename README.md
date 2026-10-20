@@ -71,11 +71,17 @@ backend/
   internal/         アプリ内部の実装（外部から import できない）
     menu/           メニュー
     order/          注文
+    db/             データベースへの接続
+    env/            環境変数の読み取り
     httpx/          HTTP 共通処理
     server/         ルーティング
-  db/migrations/    スキーマ定義
+  db/
+    migrations/     スキーマ定義
+    seeds/          開発用データ
+    init.sh         初回起動時に migrations → seeds の順で流し込む
 frontend/           Vite + React
 compose.yml         PostgreSQL
+mise.toml           ツールのバージョンとタスク
 ```
 
 Go ではレイヤー（model / controller）ではなく関心事（menu / order）でパッケージを分けるのが一般的なため、
@@ -87,16 +93,62 @@ Go ではレイヤー（model / controller）ではなく関心事（menu / orde
 # ツールの用意
 mise install
 
-# データベース
-docker compose up -d
+# データベース（初回はスキーマと開発用のメニューが自動で入る）
+docker compose up -d --wait
 
-# バックエンド
+# バックエンド（http://localhost:8080）
 cd backend && go run ./cmd/api
 
-# フロントエンド
+# フロントエンド（/api への要求はバックエンドへ中継される）
 cd frontend && npm install && npm run dev
 ```
 
+### 環境変数
+
+| 変数 | 既定値 | 用途 |
+|---|---|---|
+| `PORT` | `8080` | API サーバーの待ち受けポート |
+| `DB_HOST` / `DB_PORT` | `localhost` / `5432` | 接続先 |
+| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `app` / `password` / `ordering` | compose.yml の設定に合わせてある |
+| `DB_SSLMODE` | `disable` | |
+| `API_URL`（フロントエンド） | `http://localhost:8080` | Vite が `/api` を中継する先。`PORT` を変えたときに合わせる |
+
+```bash
+# 例: 8080 が埋まっているとき
+PORT=8081 go run ./cmd/api
+API_URL=http://localhost:8081 npm run dev
+```
+
+### データベースを作り直す
+
+`migrations` と `seeds` が実行されるのは、データ領域が空のとき（ボリュームを初めて作ったとき）だけ。
+スキーマや開発用データを変えたら、ボリュームごと作り直す。**保存したデータはすべて消える。**
+
+```bash
+mise run db:reset
+```
+
+### テスト
+
+```bash
+mise run test   # cd backend && go test ./... と同じ
+```
+
+## API
+
+| メソッド | 経路 | 内容 |
+|---|---|---|
+| `GET` | `/healthz` | 死活監視 |
+| `GET` | `/api/menu-items` | メニューの一覧。`category=food\|drink`、`availableOnly=true` で絞り込める |
+| `GET` | `/api/menu-items/{id}` | メニュー 1 件。存在しなければ 404 |
+
+エラーは状態コードとともに `{"error": "メッセージ"}` の形で返す。
+
 ## 現在の状況
 
-要件定義を終えた段階。これからスキーマ定義と API の実装に入る。
+- [x] 要件定義
+- [x] スキーマ定義（メニュー・伝票・注文・明細）
+- [x] データベースへの接続
+- [x] メニューを参照する API
+- [ ] 伝票と注文の API（伝票を開く・注文を追加する・会計する・伝票を閉じる）
+- [ ] フロントエンドの画面（現在は Vite のテンプレートのまま）
