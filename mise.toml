@@ -7,3 +7,7 @@ description = "データベースを破棄して作り直す（スキーマと�
 # 初期化の SQL はデータ領域が空のときしか実行されないため、ボリュームごと消す。
 run = ["docker compose down --volumes", "docker compose up --detach --wait"]
 
+[tasks.test]
+description = "バックエンドのテストを実行する"
+dir = "backend"
+run = "go test ./..."
