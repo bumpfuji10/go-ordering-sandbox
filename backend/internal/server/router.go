@@ -7,6 +7,7 @@ import (
 
 	"example.com/ordering/internal/httpx"
 	"example.com/ordering/internal/menu"
+	"example.com/ordering/internal/order"
 )
 
 // NewRouter は依存を組み立て、経路を登録したルータを返す。
@@ -20,6 +21,9 @@ func NewRouter(db *sql.DB) http.Handler {
 
 	menuHandler := menu.NewHandler(menu.NewPostgresRepository(db))
 	menuHandler.Register(mux)
+
+	orderHandler := order.NewHandler(order.NewPostgresRepository(db))
+	orderHandler.Register(mux)
 
 	return mux
 }
