@@ -38,10 +38,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 //
 //	POST /api/checks  {"tableNo": 3}
 func (h *Handler) open(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		TableNo int `json:"tableNo"`
-	}
-	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+	req, err := httpx.DecodeJSON[openRequest](w, r)
+	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -112,13 +110,8 @@ func (h *Handler) addOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Items []struct {
-			MenuItemID int64 `json:"menuItemId"`
-			Quantity   int   `json:"quantity"`
-		} `json:"items"`
-	}
-	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+	req, err := httpx.DecodeJSON[addOrderRequest](w, r)
+	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -207,6 +200,25 @@ func writeError(w http.ResponseWriter, err error, failMessage string) {
 		log.Printf("order: %s: %v", failMessage, err)
 		httpx.Error(w, http.StatusInternalServerError, failMessage)
 	}
+}
+
+// 以下は要求の形。
+
+type openRequest struct {
+	TableNo int `json:"tableNo"`
+}
+
+type addOrderRequest struct {
+	Items []lineRequest `json:"items"`
+}
+
+// lineRequest は注文で頼まれた 1 品目。
+//
+// 単価の項目は持たない。DecodeJSON は定義にない項目を拒否するため、
+// 画面から priceYen が送られてきても 400 になる。
+type lineRequest struct {
+	MenuItemID int64 `json:"menuItemId"`
+	Quantity   int   `json:"quantity"`
 }
 
 // 以下は応答の形。
