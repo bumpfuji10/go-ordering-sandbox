@@ -1,4 +1,4 @@
-// Package httpx は HTTP の応答に関する共通の処理を提供する。
+// Package httpx は HTTP の要求と応答に関する共通の処理を提供する。
 package httpx
 
 import (
