@@ -120,49 +120,16 @@ func (r *PostgresRepository) AddOrder(ctx context.Context, checkID int64, lines 
 	// Commit の後に呼んでも何もしないため、失敗したときの取り消しを defer で一括して引き受ける。
 	defer tx.Rollback()
 
-	// FOR UPDATE で伝票の行を押さえる。会計の UPDATE はこの行ロックの解放を
-	// 待つため、「状態を確かめた直後に会計され、会計済みの伝票へ注文が入る」
-	// という割り込みが起きない。
-	var status Status
-	err = tx.QueryRowContext(ctx, `SELECT status FROM checks WHERE id = $1 FOR UPDATE`, checkID).Scan(&status)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return Order{}, ErrCheckNotFound
-		}
-		return Order{}, fmt.Errorf("order: 伝票の取得に失敗しました: %w", err)
+	if err := lockOpenCheck(ctx, tx, checkID); err != nil {
+		return Order{}, err
 	}
-	if status != StatusOpen {
-		return Order{}, ErrCheckNotOpen
-	}
-
 	menu, err := lookupMenuItems(ctx, tx, lines)
 	if err != nil {
 		return Order{}, err
 	}
-
-	var o Order
-	err = tx.QueryRowContext(ctx,
-		`INSERT INTO orders (check_id) VALUES ($1) RETURNING id, ordered_at`, checkID,
-	).Scan(&o.ID, &o.OrderedAt)
+	o, err := insertOrder(ctx, tx, checkID, lines, menu)
 	if err != nil {
-		return Order{}, fmt.Errorf("order: 注文を保存できませんでした: %w", err)
-	}
-
-	o.Items = make([]Item, 0, len(lines))
-	for _, l := range lines {
-		m := menu[l.MenuItemID]
-		// 品名と単価はメニューから写し取る。後でメニューの価格が変わっても
-		// この明細の金額は変わらない。
-		it := Item{MenuItemID: l.MenuItemID, Name: m.name, PriceYen: m.priceYen, Quantity: l.Quantity}
-		err := tx.QueryRowContext(ctx,
-			`INSERT INTO order_items (order_id, menu_item_id, name, price_yen, quantity)
-			 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-			o.ID, it.MenuItemID, it.Name, it.PriceYen, it.Quantity,
-		).Scan(&it.ID)
-		if err != nil {
-			return Order{}, fmt.Errorf("order: 明細を保存できませんでした: %w", err)
-		}
-		o.Items = append(o.Items, it)
+		return Order{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -226,6 +193,27 @@ func (r *PostgresRepository) missingOr(ctx context.Context, id int64, otherwise 
 	return otherwise
 }
 
+// lockOpenCheck は伝票の行を押さえ、利用中であることを確かめる。
+//
+// FOR UPDATE で押さえた行ロックはトランザクションの終わりまで続く。会計の
+// UPDATE はこの解放を待つため、「状態を確かめた直後に会計され、会計済みの
+// 伝票へ注文が入る」という割り込みが起きない。トランザクションの外で呼ぶと
+// ロックがすぐに外れて意味をなさないため、*sql.Tx を受け取る。
+func lockOpenCheck(ctx context.Context, tx *sql.Tx, checkID int64) error {
+	var status Status
+	err := tx.QueryRowContext(ctx, `SELECT status FROM checks WHERE id = $1 FOR UPDATE`, checkID).Scan(&status)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrCheckNotFound
+		}
+		return fmt.Errorf("order: 伝票の取得に失敗しました: %w", err)
+	}
+	if status != StatusOpen {
+		return ErrCheckNotOpen
+	}
+	return nil
+}
+
 // menuSnapshot は明細へ写し取るメニューの値。
 type menuSnapshot struct {
 	name      string
@@ -276,6 +264,39 @@ func lookupMenuItems(ctx context.Context, tx *sql.Tx, lines []Line) (map[int64]m
 		}
 	}
 	return menu, nil
+}
+
+// insertOrder は注文 1 回分と、その明細を保存する。
+//
+// menu は lookupMenuItems が返した、lines のすべての品目を含むメニュー。
+func insertOrder(
+	ctx context.Context, tx *sql.Tx, checkID int64, lines []Line, menu map[int64]menuSnapshot,
+) (Order, error) {
+	var o Order
+	err := tx.QueryRowContext(ctx,
+		`INSERT INTO orders (check_id) VALUES ($1) RETURNING id, ordered_at`, checkID,
+	).Scan(&o.ID, &o.OrderedAt)
+	if err != nil {
+		return Order{}, fmt.Errorf("order: 注文を保存できませんでした: %w", err)
+	}
+
+	o.Items = make([]Item, 0, len(lines))
+	for _, l := range lines {
+		m := menu[l.MenuItemID]
+		// 品名と単価はメニューから写し取る。後でメニューの価格が変わっても
+		// この明細の金額は変わらない。
+		it := Item{MenuItemID: l.MenuItemID, Name: m.name, PriceYen: m.priceYen, Quantity: l.Quantity}
+		err := tx.QueryRowContext(ctx,
+			`INSERT INTO order_items (order_id, menu_item_id, name, price_yen, quantity)
+			 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+			o.ID, it.MenuItemID, it.Name, it.PriceYen, it.Quantity,
+		).Scan(&it.ID)
+		if err != nil {
+			return Order{}, fmt.Errorf("order: 明細を保存できませんでした: %w", err)
+		}
+		o.Items = append(o.Items, it)
+	}
+	return o, nil
 }
 
 // attachOrders は伝票それぞれに注文と明細を読み込む。
