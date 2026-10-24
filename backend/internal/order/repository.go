@@ -36,8 +36,8 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 // 列の並びは scanCheck の順序と対応する。
 const checkColumns = `id, table_no, status, opened_at, paid_at, closed_at`
 
-// checks_open_table_no_idx は「1 テーブルに利用中の伝票は 1 枚だけ」を守る部分一意索引。
-const openTableNoIndex = "checks_open_table_no_idx"
+// checks_seated_table_no_idx は「1 テーブルに退店していない伝票は 1 枚だけ」を守る部分一意索引。
+const seatedTableNoIndex = "checks_seated_table_no_idx"
 
 // Open はテーブルに新しい伝票を開く。
 func (r *PostgresRepository) Open(ctx context.Context, tableNo int) (Check, error) {
@@ -45,10 +45,10 @@ func (r *PostgresRepository) Open(ctx context.Context, tableNo int) (Check, erro
 
 	c, err := scanCheck(r.db.QueryRowContext(ctx, query, tableNo))
 	if err != nil {
-		// 「利用中の伝票があるか」を先に SELECT で確かめる方法では、
+		// 「退店していない伝票があるか」を先に SELECT で確かめる方法では、
 		// 同時に 2 つの要求が来ると両方とも「ない」と判断して通ってしまう。
 		// 一意索引に判定を任せ、違反を ErrTableOccupied に翻訳する。
-		if isUniqueViolation(err, openTableNoIndex) {
+		if isUniqueViolation(err, seatedTableNoIndex) {
 			return Check{}, ErrTableOccupied
 		}
 		return Check{}, fmt.Errorf("order: 伝票を開けませんでした: %w", err)
