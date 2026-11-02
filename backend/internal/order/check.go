@@ -37,8 +37,9 @@ func (s Status) Valid() bool {
 // 呼び出し側は errors.Is でこれらと照合し、HTTP の状態コードへ変換する。
 var (
 	ErrCheckNotFound = errors.New("order: 伝票が見つかりません")
-	// 1 つのテーブルに利用中の伝票は同時に 1 枚だけ。
-	ErrTableOccupied = errors.New("order: このテーブルには利用中の伝票があります")
+	// 1 つのテーブルに退店していない伝票は同時に 1 枚だけ。会計を済ませても、
+	// 退店するまでは席にいるため、paid の伝票も数える。
+	ErrTableOccupied = errors.New("order: このテーブルには退店していない伝票があります")
 	// 注文の追加と会計は、利用中の伝票にしか行えない。
 	ErrCheckNotOpen = errors.New("order: 伝票が利用中ではありません")
 	// 伝票を閉じられるのは、会計が済んだ伝票だけ。

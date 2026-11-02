@@ -186,7 +186,7 @@ func writeError(w http.ResponseWriter, err error, failMessage string) {
 		httpx.Error(w, http.StatusNotFound, "伝票が見つかりません")
 	// 要求の形は正しいが、伝票の今の状態では受け付けられない。
 	case errors.Is(err, ErrTableOccupied):
-		httpx.Error(w, http.StatusConflict, "このテーブルには利用中の伝票があります")
+		httpx.Error(w, http.StatusConflict, "このテーブルには退店していない伝票があります")
 	case errors.Is(err, ErrCheckNotOpen):
 		httpx.Error(w, http.StatusConflict, "伝票が利用中ではありません")
 	case errors.Is(err, ErrCheckNotPaid):

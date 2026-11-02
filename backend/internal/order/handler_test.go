@@ -83,7 +83,7 @@ func TestHandlerOpen(t *testing.T) {
 		{"JSON でない", `tableNo=3`, nil, http.StatusBadRequest},
 		{"定義にない項目", `{"tableNo": 3, "table": 3}`, nil, http.StatusBadRequest},
 		{"JSON の値が 2 つ", `{"tableNo": 3}{"tableNo": 4}`, nil, http.StatusBadRequest},
-		{"利用中のテーブル", `{"tableNo": 3}`, ErrTableOccupied, http.StatusConflict},
+		{"退店していないテーブル", `{"tableNo": 3}`, ErrTableOccupied, http.StatusConflict},
 	}
 
 	for _, tt := range tests {
